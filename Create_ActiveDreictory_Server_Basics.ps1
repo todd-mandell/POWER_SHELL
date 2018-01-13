@@ -20,13 +20,10 @@ IF ($_.RestartNeeded -eq "No") {Restart-Computer -wait} ELSE {"No Restart Needed
 install-WindowsFeature AD-Domain-Services -IncludeManagementTools
 IF ($_.RestartNeeded -eq "No") {Restart-Computer -wait} ELSE {"No Restart Needed"}
 
-add-windowsfeature RSAT-AD-Tools
+add-windowsfeature -name dns,gpmc,RSAT-AD-Tools
 IF ($_.RestartNeeded -eq "No") {Restart-Computer -wait} ELSE {"No Restart Needed"}
 
 $NuIMP = 'Import-Module ActiveDirectory,ADDSDeployment';InlineScript {$NuIMP}
-
-add-windowsfeature -name ad-domain-services,dns,gpmc
-IF ($_.RestartNeeded -eq "No") {Restart-Computer -wait} ELSE {"No Restart Needed"}
 
 Install-ADDSForest -CreateDnsDelegation:$false -DatabasePath "C:\Windows\NTDS" -DomainMode "Win2012" -DomainName $NuDomainName -DomainNetbiosName $NuNetBiosName -ForestMode "Win2012" -InstallDns:$true -LogPath "C:\Windows\NTDS" -NoRebootOnCompletion:$false -SysvolPath "C:\Windows\SYSVOL" -Force:$true
 
