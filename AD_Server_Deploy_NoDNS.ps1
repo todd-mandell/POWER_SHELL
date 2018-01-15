@@ -12,7 +12,7 @@ $NuDomainName = 'Corp.NuDomain.Bidness'
 $NuNetBiosName = 'NuNetBiosName'
 
 #Fill In the IP Blanks
-$NuIP = 'New-NetIPAdress -IPAddress 192.168.1.2 -InterfaceAlias Ethernet0';InlineScript {$NuIP}
+$NuIP = 'New-NetIPAddress -IPAddress 192.168.1.2 -InterfaceAlias Ethernet0';InlineScript {$NuIP}
 
 rename-computer -NewName $NuPCName
 IF ($_.RestartNeeded -eq "No") {Restart-Computer -wait} ELSE {"No Restart Needed"}
