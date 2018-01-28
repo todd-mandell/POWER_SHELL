@@ -13,7 +13,7 @@ $NuNetBiosName = 'NuNetBiosName';
 $PlainPassword= 'Passwordio2';
 $SafeModeAdminPW = $PlainPassword | ConvertTo-SecureString -AsPlainText -Force 
 
-$NuIP = 'New-NetIPAdress -IPAddress 192.168.50.206 -InterfaceAlias Ethernet0';InlineScript {$NuIP};
+$NuIP = 'New-NetIPAdress -IPAddress ##IPV4-ADDRESS## -InterfaceAlias Ethernet0';InlineScript {$NuIP};
 
 rename-computer -NewName $NuPCName;IF ($_.RestartNeeded -eq "No") {Restart-Computer -wait} ELSE {"No Restart Needed"};
 
