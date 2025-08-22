@@ -1,0 +1,1 @@
+﻿Get-ADUser -filter {Enabled -eq $True -and PasswordNeverExpires -eq $False} –Properties 'Name', 'msDS-UserPasswordExpiryTimeComputed' | Select-Object -Property 'Name',@{Name='ExpiryDate';Expression={[datetime]::FromFileTime($_.'msDS-UserPasswordExpiryTimeComputed')}} | Sort-Object -descending -Property  ExpiryDate
