@@ -1,6 +1,6 @@
 #M365 Risky signin finder ver 1.05
 Import-Module Microsoft.Graph.Identity.SignIns
-connect-mgGraph -tenantID TENANTUUID -Scopes "IdentityRiskEvent.Read.All"
+connect-mgGraph -tenantID TENANTUUID -Scopes "IdentityRiskEvent.Read.All" -nowelcome
 ### future idea to revoke sessions would need a seperate scope. send the email alert to user and MSP and then revoke the user and change pw to random crap in the script a few seconds later to ensure delivery
 # connect-mgGraph -Scopes "User.RevokeSessions.All"
 
@@ -31,7 +31,7 @@ if (Test-Path $filePath) {
 
 while ($true) {
     try {
-      
+      	write-host "CUSTOMERNAME-FOR-REFERENCE Risky-signin monitor active"
         #get risky users 
 		$riskyUsers = Get-MgRiskDetection
 
