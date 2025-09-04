@@ -29,9 +29,11 @@ if (Test-Path $filePath) {
 # this is the array formatted by curly braces
  $alertedSignIns = @{}
 
+write-host "CUSTOMERNAME-FOR-REFERENCE Risky-signin monitor active"
+
 while ($true) {
     try {
-      	write-host "CUSTOMERNAME-FOR-REFERENCE Risky-signin monitor active"
+
         #get risky users 
 		$riskyUsers = Get-MgRiskDetection
 
