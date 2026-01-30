@@ -68,4 +68,25 @@ foreach ($evt in $events) {
 
     $attachments = Invoke-WithRetry {
         Get-MgMeEventAttachment -EventId $evt.Id -All
-    } | Where-Object { $_.'@odata.type' -eq "#microsoft
+    } | Where-Object { $_.'@odata.type' -eq "#microsoft.graph.fileAttachment" }
+
+    $fileAttachments = foreach ($att in $attachments) {
+        @{
+            Name        = $att.Name
+            ContentType = $att.ContentType
+            ContentBytes = $att.ContentBytes
+            Size        = $att.Size
+            IsInline    = $att.IsInline
+        }
+    }
+
+    $backup += @{
+        Event       = $evt
+        Attachments = $fileAttachments
+    }
+}
+
+Write-Host "Saving backup to $BackupPath..."
+$backup | ConvertTo-Json -Depth 20 | Out-File -FilePath $BackupPath -Encoding UTF8
+
+Write-Host "Backup complete."
