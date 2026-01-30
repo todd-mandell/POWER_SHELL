@@ -1,13 +1,8 @@
 # Backup the signed-in user's primary calendar with file attachments
 
-# --- Cross-platform file "dialog" via prompt ---
 function Save-BackupFile {
-    param(
-        [string]$Title = "Choose where to save the backup"
-    )
-
     $suggested = "CalendarBackup_{0:yyyy-MM-dd_HH-mm-ss}.json" -f (Get-Date)
-    $path = Read-Host "$Title (enter full path ending in .json)`nSuggested: $suggested"
+    $path = Read-Host "Enter full path for backup file (must end in .json)`nSuggested: $suggested"
 
     if (-not $path.EndsWith(".json")) {
         throw "Backup file must end with .json"
@@ -16,55 +11,46 @@ function Save-BackupFile {
     return $path
 }
 
-# --- Retry wrapper for throttling ---
 function Invoke-WithRetry {
-    param(
-        [scriptblock]$Script,
-        [int]$MaxRetries = 5
-    )
+    param([scriptblock]$Script, [int]$MaxRetries = 5)
 
     $attempt = 0
     while ($true) {
-        try {
-            return & $Script
-        }
+        try { return & $Script }
         catch {
-            $statusCode = $null
-            try { $statusCode = $_.Exception.Response.StatusCode } catch {}
+            $status = $null
+            try { $status = $_.Exception.Response.StatusCode } catch {}
 
-            if ($statusCode -eq 429 -and $attempt -lt $MaxRetries) {
-                $retryAfter = $null
+            if ($status -eq 429 -and $attempt -lt $MaxRetries) {
+                $retryAfter = 5
                 try { $retryAfter = $_.Exception.Response.Headers["Retry-After"] } catch {}
-                if (-not $retryAfter) { $retryAfter = 5 }
-                Write-Host "Throttled. Retrying in $retryAfter seconds (attempt $($attempt+1) of $MaxRetries)..."
+                Write-Host "Throttled. Retrying in $retryAfter seconds..."
                 Start-Sleep -Seconds $retryAfter
                 $attempt++
             }
-            else {
-                throw $_
-            }
+            else { throw $_ }
         }
     }
 }
 
-# --- Main script ---
 $BackupPath = Save-BackupFile
 
 if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
     Install-Module Microsoft.Graph -Scope CurrentUser -Force
 }
-
 Import-Module Microsoft.Graph
 
 Write-Host "Connecting to Microsoft Graph..."
 Connect-MgGraph -Scopes "Calendars.Read"
 
-Write-Host "Retrieving events from primary calendar..."
-$events = Invoke-WithRetry { Get-MgUserEvent -UserId 'me' -All }
+# --- FIX: Get real user ID ---
+$UserId = (Get-MgUser -UserId 'me').Id
+
+Write-Host "Retrieving events..."
+$events = Invoke-WithRetry { Get-MgUserEvent -UserId $UserId -All }
 
 $total = $events.Count
 $index = 0
-
 $backup = @()
 
 foreach ($evt in $events) {
@@ -76,7 +62,7 @@ foreach ($evt in $events) {
         -PercentComplete (($index / $total) * 100)
 
     $attachments = Invoke-WithRetry {
-        Get-MgUserEventAttachment -UserId 'me' -EventId $evt.Id -All
+        Get-MgUserEventAttachment -UserId $UserId -EventId $evt.Id -All
     } | Where-Object { $_.'@odata.type' -eq "#microsoft.graph.fileAttachment" }
 
     $fileAttachments = foreach ($att in $attachments) {
