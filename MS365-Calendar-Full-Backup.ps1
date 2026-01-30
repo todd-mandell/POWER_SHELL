@@ -55,7 +55,7 @@ Write-Host "Connecting to Microsoft Graph..."
 Connect-MgGraph -Scopes "Calendars.Read"
 
 Write-Host "Retrieving events..."
-$events = Invoke-WithRetry { Get-MgMeCalendarEvent -All }
+$events = Invoke-WithRetry { Get-MgUserCalendarEvent -UserId 'me' -All }
 
 $total = $events.Count
 $index = 0
@@ -64,10 +64,14 @@ $backup = @()
 
 foreach ($evt in $events) {
     $index++
-    Write-Progress -Activity "Backing up calendar" -Status "Processing event $index of $total" -PercentComplete (($index / $total) * 100)
+
+    Write-Progress `
+        -Activity "Backing up calendar" `
+        -Status ("Processing event {0} of {1}" -f $index, $total) `
+        -PercentComplete (($index / $total) * 100)
 
     $attachments = Invoke-WithRetry {
-        Get-MgMeEventAttachment -EventId $evt.Id -All
+        Get-MgUserEventAttachment -UserId 'me' -EventId $evt.Id -All
     } | Where-Object { $_.'@odata.type' -eq "#microsoft.graph.fileAttachment" }
 
     $fileAttachments = foreach ($att in $attachments) {
