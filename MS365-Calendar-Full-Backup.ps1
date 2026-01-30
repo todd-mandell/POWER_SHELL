@@ -1,13 +1,13 @@
 # Backup the signed-in user's primary calendar with file attachments
 
-# --- Cross-platform file dialog ---
+# --- Cross-platform file "dialog" via prompt ---
 function Save-BackupFile {
     param(
         [string]$Title = "Choose where to save the backup"
     )
 
     $suggested = "CalendarBackup_{0:yyyy-MM-dd_HH-mm-ss}.json" -f (Get-Date)
-    $path = Read-Host "$Title (enter path ending in .json)`nSuggested: $suggested"
+    $path = Read-Host "$Title (enter full path ending in .json)`nSuggested: $suggested"
 
     if (-not $path.EndsWith(".json")) {
         throw "Backup file must end with .json"
@@ -29,9 +29,14 @@ function Invoke-WithRetry {
             return & $Script
         }
         catch {
-            if ($_.Exception.Response.StatusCode -eq 429 -and $attempt -lt $MaxRetries) {
-                $retryAfter = $_.Exception.Response.Headers["Retry-After"]
+            $statusCode = $null
+            try { $statusCode = $_.Exception.Response.StatusCode } catch {}
+
+            if ($statusCode -eq 429 -and $attempt -lt $MaxRetries) {
+                $retryAfter = $null
+                try { $retryAfter = $_.Exception.Response.Headers["Retry-After"] } catch {}
                 if (-not $retryAfter) { $retryAfter = 5 }
+                Write-Host "Throttled. Retrying in $retryAfter seconds (attempt $($attempt+1) of $MaxRetries)..."
                 Start-Sleep -Seconds $retryAfter
                 $attempt++
             }
@@ -54,10 +59,8 @@ Import-Module Microsoft.Graph
 Write-Host "Connecting to Microsoft Graph..."
 Connect-MgGraph -Scopes "Calendars.Read"
 
-Write-Host "Retrieving events..."
-$events = Invoke-WithRetry { 
-    Get-MgUserCalendarEvent -UserId 'me' -CalendarId 'primary' -All 
-}
+Write-Host "Retrieving events from primary calendar..."
+$events = Invoke-WithRetry { Get-MgUserEvent -UserId 'me' -All }
 
 $total = $events.Count
 $index = 0
@@ -73,16 +76,16 @@ foreach ($evt in $events) {
         -PercentComplete (($index / $total) * 100)
 
     $attachments = Invoke-WithRetry {
-        Get-MgUserEventAttachment -UserId 'me' -CalendarId 'primary' -EventId $evt.Id -All
+        Get-MgUserEventAttachment -UserId 'me' -EventId $evt.Id -All
     } | Where-Object { $_.'@odata.type' -eq "#microsoft.graph.fileAttachment" }
 
     $fileAttachments = foreach ($att in $attachments) {
         @{
-            Name        = $att.Name
-            ContentType = $att.ContentType
+            Name         = $att.Name
+            ContentType  = $att.ContentType
             ContentBytes = $att.ContentBytes
-            Size        = $att.Size
-            IsInline    = $att.IsInline
+            Size         = $att.Size
+            IsInline     = $att.IsInline
         }
     }
 
