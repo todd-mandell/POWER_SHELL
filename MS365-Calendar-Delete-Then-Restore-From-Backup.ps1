@@ -1,16 +1,22 @@
 # Restore the signed-in user's primary calendar from backup
-param(
-    [Parameter(Mandatory=$true)]
-    [string]$BackupPath
-)
 
-# Ensure Graph module is installed
-if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
-    Install-Module Microsoft.Graph -Scope CurrentUser -Force
+# --- Cross-platform file dialog ---
+function Select-BackupFile {
+    param(
+        [string]$Title = "Select a JSON backup file"
+    )
+
+    $file = Get-ChildItem -Filter *.json | 
+        Out-GridView -Title $Title -PassThru
+
+    if (-not $file) {
+        throw "No file selected."
+    }
+
+    return $file.FullName
 }
 
-Import-Module Microsoft.Graph
-
+# --- Retry wrapper for throttling ---
 function Invoke-WithRetry {
     param(
         [scriptblock]$Script,
@@ -35,6 +41,15 @@ function Invoke-WithRetry {
         }
     }
 }
+
+# --- Main script ---
+$BackupPath = Select-BackupFile
+
+if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
+    Install-Module Microsoft.Graph -Scope CurrentUser -Force
+}
+
+Import-Module Microsoft.Graph
 
 Write-Host "Connecting to Microsoft Graph..."
 Connect-MgGraph -Scopes "Calendars.ReadWrite"
