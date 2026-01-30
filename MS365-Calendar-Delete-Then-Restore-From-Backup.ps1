@@ -1,35 +1,69 @@
+# Restore the signed-in user's primary calendar from backup
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$UserPrincipalName,
-
     [Parameter(Mandatory=$true)]
     [string]$BackupPath
 )
 
-# Install module if missing
+# Ensure Graph module is installed
 if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
     Install-Module Microsoft.Graph -Scope CurrentUser -Force
 }
 
 Import-Module Microsoft.Graph
 
+function Invoke-WithRetry {
+    param(
+        [scriptblock]$Script,
+        [int]$MaxRetries = 5
+    )
+
+    $attempt = 0
+    while ($true) {
+        try {
+            return & $Script
+        }
+        catch {
+            if ($_.Exception.Response.StatusCode -eq 429 -and $attempt -lt $MaxRetries) {
+                $retryAfter = $_.Exception.Response.Headers["Retry-After"]
+                if (-not $retryAfter) { $retryAfter = 5 }
+                Start-Sleep -Seconds $retryAfter
+                $attempt++
+            }
+            else {
+                throw $_
+            }
+        }
+    }
+}
+
 Write-Host "Connecting to Microsoft Graph..."
 Connect-MgGraph -Scopes "Calendars.ReadWrite"
 
 Write-Host "Loading backup file..."
-$events = Get-Content -Path $BackupPath | ConvertFrom-Json
+$backup = Get-Content -Path $BackupPath | ConvertFrom-Json
 
 Write-Host "Deleting existing events..."
-$existing = Get-MgUserCalendarEvent -UserId $UserPrincipalName -All
+$existing = Invoke-WithRetry { Get-MgMeCalendarEvent -All }
 
 foreach ($evt in $existing) {
-    Remove-MgUserCalendarEvent -UserId $UserPrincipalName -EventId $evt.Id -Confirm:$false
+    Invoke-WithRetry {
+        Remove-MgMeCalendarEvent -EventId $evt.Id -Confirm:$false
+    }
 }
+
+$total = $backup.Count
+$index = 0
 
 Write-Host "Restoring events..."
 
-foreach ($evt in $events) {
-    $newEvent = @{
+foreach ($item in $backup) {
+    $index++
+    Write-Progress -Activity "Restoring calendar" -Status "Restoring event $index of $total" -PercentComplete (($index / $total) * 100)
+
+    $evt = $item.Event
+    $atts = $item.Attachments
+
+    $newEventBody = @{
         Subject      = $evt.Subject
         Body         = $evt.Body
         Start        = $evt.Start
@@ -40,10 +74,28 @@ foreach ($evt in $events) {
         Sensitivity  = $evt.Sensitivity
         Importance   = $evt.Importance
         Recurrence   = $evt.Recurrence
+        Categories   = $evt.Categories
+        OnlineMeetingUrl = $evt.OnlineMeetingUrl
         ReminderMinutesBeforeStart = $evt.ReminderMinutesBeforeStart
     }
 
-    New-MgUserCalendarEvent -UserId $UserPrincipalName -BodyParameter $newEvent | Out-Null
+    $newEvent = Invoke-WithRetry {
+        New-MgMeCalendarEvent -BodyParameter $newEventBody
+    }
+
+    foreach ($att in $atts) {
+        $attachmentBody = @{
+            "@odata.type" = "#microsoft.graph.fileAttachment"
+            Name          = $att.Name
+            ContentType   = $att.ContentType
+            ContentBytes  = $att.ContentBytes
+            IsInline      = $att.IsInline
+        }
+
+        Invoke-WithRetry {
+            New-MgMeEventAttachment -EventId $newEvent.Id -BodyParameter $attachmentBody
+        }
+    }
 }
 
 Write-Host "Restore complete."
